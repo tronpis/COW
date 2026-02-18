@@ -19,7 +19,7 @@ namespace fs = std::filesystem;
 
 void printVersion() {
     std::cout << "COW Programming Language v" << COW_VERSION_STRING << "\n"
-              << "Modern C++ Implementation\n"
+              << "Maintainer: Trompis (github.com/tronpis)\n"
               << "Original by BigZaphod (Sean Heber)\n";
 }
 

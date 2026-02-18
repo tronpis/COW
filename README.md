@@ -4,7 +4,10 @@
 [![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](CHANGELOG.md)
 [![C++](https://img.shields.io/badge/C++-17-orange.svg)](https://isocpp.org/)
 
-The COW Programming Language is an esoteric programming language created by [BigZaphod (Sean Heber)](http://www.bigzaphod.org/cow/). This is a modern C++ implementation with professional tooling, comprehensive tests, and formal specification.
+The COW Programming Language is an esoteric programming language created by [BigZaphod (Sean Heber)](http://www.bigzaphod.org/cow/).
+
+**Maintainer:** [Trompis](https://github.com/tronpis)  
+This is the official modern C++ implementation with professional tooling, comprehensive tests, and formal specification.
 
 ## Features
 
@@ -195,4 +198,10 @@ ctest --test-dir build --output-on-failure
 
 Public Domain - Original code by Sean Heber (BigZaphod)
 
-Modern implementation contributions are also released to the Public Domain.
+Modern implementation maintained by [Trompis](https://github.com/tronpis).  
+Contributions are also released to the Public Domain.
+
+## Credits
+
+- **Original Author:** Sean Heber (BigZaphod) - Created the COW language
+- **Maintainer:** Trompis - Modern C++ implementation and tooling

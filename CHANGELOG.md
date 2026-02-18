@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Maintainer: [Trompis](https://github.com/tronpis)
+
 ### Added
 - Modern C++17 implementation with proper encapsulation
 - CMake build system with install targets

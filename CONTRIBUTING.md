@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing to the COW Programming Language!
 
+This project is maintained by [Trompis](https://github.com/tronpis).
+
 ## Code of Conduct
 
 This project adheres to a code of conduct. By participating, you are expected to uphold this code:
