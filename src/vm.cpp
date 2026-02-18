@@ -1,10 +1,10 @@
 //--------------------------------------------
-// COW PROGRAMMING LANGUAGE - VM Implementation
+// COW PROGRAMMING LANGUAGE - Optimized VM Implementation
 //--------------------------------------------
 #include "cow/vm.hpp"
-
 #include <iostream>
-#include <limits>
+#include <cstring>
+#include <stack>
 
 namespace cow {
 
@@ -20,7 +20,34 @@ CowVM::CowVM(const Limits& limits, size_t memory_size) : limits_(limits) {
 }
 
 void CowVM::load(const std::vector<Instruction>& program) {
-    program_ = program;
+    // Convert instructions to optimized format with pre-computed jump targets
+    program_.clear();
+    program_.reserve(program.size());
+
+    // First pass: copy instructions
+    for (const auto& inst : program) {
+        OptimizedInstruction opt;
+        opt.op = inst.op;
+        opt.argument = inst.argument;
+        opt.jump_target = 0;
+        program_.push_back(opt);
+    }
+
+    // Second pass: pre-compute loop jump targets (O(n) once, not every iteration)
+    std::stack<size_t> loop_stack;
+    for (size_t i = 0; i < program_.size(); ++i) {
+        if (program_[i].op == OpCode::MOO_Upper) {
+            loop_stack.push(i);
+        } else if (program_[i].op == OpCode::Moo_Lower) {
+            if (!loop_stack.empty()) {
+                size_t start = loop_stack.top();
+                loop_stack.pop();
+                program_[i].jump_target = start;      // moo jumps back to MOO
+                program_[start].jump_target = i;      // MOO jumps forward to moo
+            }
+        }
+    }
+
     reset();
 }
 
@@ -33,13 +60,6 @@ void CowVM::reset() {
     running_ = false;
     status_ = VMStatus::Ready;
     steps_executed_ = 0;
-}
-
-int CowVM::memoryAt(size_t pos) const {
-    if (pos >= memory_.size()) {
-        throw RuntimeError("memory access out of bounds");
-    }
-    return memory_[pos];
 }
 
 int CowVM::defaultInput() {
@@ -69,80 +89,31 @@ void CowVM::checkLimits() {
     }
 }
 
-size_t CowVM::findLoopStart(size_t from_pos) {
-    int level = 1;
-    size_t pos = from_pos;
-
-    // Skip previous command
-    if (pos == 0) {
-        throw RuntimeError("invalid loop structure: cannot find matching MOO");
-    }
-    pos--;
-
-    while (level > 0 && pos > 0) {
-        pos--;
-        if (program_[pos].op == OpCode::Moo_Lower) {
-            level++;
-        } else if (program_[pos].op == OpCode::MOO_Upper) {
-            level--;
-        }
-    }
-
-    if (level != 0) {
-        throw RuntimeError("invalid loop structure: unbalanced moo/MOO");
-    }
-
-    return pos;
-}
-
-size_t CowVM::findLoopEnd(size_t from_pos) {
-    int level = 1;
-    size_t pos = from_pos + 1;  // Start after current MOO
-
-    while (level > 0 && pos < program_.size()) {
-        if (program_[pos].op == OpCode::MOO_Upper) {
-            level++;
-        } else if (program_[pos].op == OpCode::Moo_Lower) {
-            level--;
-        }
-        if (level > 0) {
-            pos++;
-        }
-    }
-
-    if (level != 0) {
-        throw RuntimeError("invalid loop structure: unbalanced MOO/moo");
-    }
-
-    return pos;
-}
-
-void CowVM::execute(const Instruction& inst) {
+void CowVM::execute(const OptimizedInstruction& inst) {
+    // Inline dispatch for performance - compiler can optimize this better
     switch (inst.op) {
         case OpCode::Moo_Lower: {
-            // Jump back to matching MOO if current memory is non-zero
+            // Jump back to matching MOO if memory is non-zero
             if (memory_[memory_ptr_] != 0) {
-                pc_ = findLoopStart(pc_);
+                pc_ = inst.jump_target;
+                return;  // Don't increment PC
             }
             break;
         }
 
         case OpCode::mOo: {
-            // Move memory pointer back
             if (memory_ptr_ == 0) {
-                throw RuntimeError("memory pointer underflow (attempted to move below position 0)");
+                throw RuntimeError("memory pointer underflow");
             }
             memory_ptr_--;
             break;
         }
 
         case OpCode::moO: {
-            // Move memory pointer forward
             memory_ptr_++;
             if (memory_ptr_ >= memory_.size()) {
                 if (limits_.max_memory > 0 && memory_.size() >= limits_.max_memory) {
-                    throw LimitError("maximum memory size exceeded (limit: " +
-                                     std::to_string(limits_.max_memory) + " cells)");
+                    throw LimitError("maximum memory exceeded");
                 }
                 memory_.push_back(0);
             }
@@ -150,46 +121,32 @@ void CowVM::execute(const Instruction& inst) {
         }
 
         case OpCode::mOO: {
-            // Execute instruction at memory position
-            int mem_val = memory_[memory_ptr_];
-            if (mem_val == 3) {
-                // Special case: exit
+            int val = memory_[memory_ptr_];
+            if (val == 3) {
                 running_ = false;
                 status_ = VMStatus::Halted;
-                return;
+            } else if (val >= 0 && val <= 11) {
+                // Execute instruction from memory
+                OptimizedInstruction temp;
+                temp.op = static_cast<OpCode>(val);
+                temp.argument = 0;
+                temp.jump_target = 0;
+                execute(temp);
             }
-            if (mem_val >= 0 && mem_val <= 11) {
-                // Execute the instruction stored in memory
-                execute(Instruction(static_cast<OpCode>(mem_val)));
-                // Don't increment PC - we already executed one
-                return;
-            }
-            // Invalid instruction in memory - do nothing (as per spec)
             break;
         }
 
         case OpCode::Moo_Mixed: {
-            // I/O operation
             if (memory_[memory_ptr_] != 0) {
-                // Output character
                 if (output_char_handler_) {
                     output_char_handler_(static_cast<char>(memory_[memory_ptr_]));
                 } else {
                     defaultOutputChar(static_cast<char>(memory_[memory_ptr_]));
                 }
             } else {
-                // Input character
-                int c;
-                if (input_handler_) {
-                    c = input_handler_();
-                } else {
-                    c = defaultInput();
-                }
-                if (c == EOF) {
-                    c = 0;
-                }
+                int c = input_handler_ ? input_handler_() : defaultInput();
+                if (c == EOF) c = 0;
                 memory_[memory_ptr_] = c;
-                // Consume rest of line
                 if (c != '\n') {
                     while ((c = defaultInput()) != '\n' && c != EOF);
                 }
@@ -198,37 +155,30 @@ void CowVM::execute(const Instruction& inst) {
         }
 
         case OpCode::MOo: {
-            // Decrement memory
-            memory_[memory_ptr_]--;
+            memory_[memory_ptr_] -= inst.argument > 0 ? inst.argument : 1;
             break;
         }
 
         case OpCode::MoO: {
-            // Increment memory
-            if (inst.argument > 1) {
-                memory_[memory_ptr_] += inst.argument;
-            } else {
-                memory_[memory_ptr_]++;
-            }
+            memory_[memory_ptr_] += inst.argument > 0 ? inst.argument : 1;
             break;
         }
 
         case OpCode::MOO_Upper: {
-            // Loop start - if zero, jump to matching moo
+            // Jump to matching moo if memory is zero
             if (memory_[memory_ptr_] == 0) {
-                pc_ = findLoopEnd(pc_);
+                pc_ = inst.jump_target;
+                return;  // Don't increment PC
             }
             break;
         }
 
         case OpCode::OOO: {
-            // Zero memory
             memory_[memory_ptr_] = 0;
             break;
         }
 
         case OpCode::MMM: {
-            // Memory/register exchange
             if (has_register_val_) {
                 memory_[memory_ptr_] = register_val_;
             } else {
@@ -239,7 +189,6 @@ void CowVM::execute(const Instruction& inst) {
         }
 
         case OpCode::OOM: {
-            // Output number
             if (output_int_handler_) {
                 output_int_handler_(memory_[memory_ptr_]);
             } else {
@@ -249,24 +198,16 @@ void CowVM::execute(const Instruction& inst) {
         }
 
         case OpCode::oom: {
-            // Input number
             char buf[100];
             int c = 0;
             int i = 0;
             while (i < static_cast<int>(sizeof(buf)) - 1) {
-                if (input_handler_) {
-                    c = input_handler_();
-                } else {
-                    c = defaultInput();
-                }
+                c = input_handler_ ? input_handler_() : defaultInput();
                 buf[i] = static_cast<char>(c);
                 i++;
                 buf[i] = '\0';
-                if (c == '\n' || c == EOF) {
-                    break;
-                }
+                if (c == '\n' || c == EOF) break;
             }
-            // Swallow remaining input if buffer full
             if (i == static_cast<int>(sizeof(buf)) - 1) {
                 while ((c = defaultInput()) != '\n' && c != EOF);
             }
@@ -276,16 +217,13 @@ void CowVM::execute(const Instruction& inst) {
 
         case OpCode::Invalid:
         default: {
-            throw RuntimeError("invalid instruction encountered");
+            throw RuntimeError("invalid instruction");
         }
     }
 }
 
 void CowVM::step() {
-    if (!running_) {
-        return;
-    }
-
+    if (!running_) return;
     if (pc_ >= program_.size()) {
         running_ = false;
         status_ = VMStatus::Halted;
@@ -295,10 +233,9 @@ void CowVM::step() {
     steps_executed_++;
     checkLimits();
 
-    const Instruction& inst = program_[pc_];
+    const OptimizedInstruction& inst = program_[pc_];
     execute(inst);
 
-    // Only increment PC if we're still running (execute might halt)
     if (running_) {
         pc_++;
     }
@@ -313,7 +250,6 @@ void CowVM::run() {
     running_ = true;
     status_ = VMStatus::Running;
 
-    // Main execution loop - no recursion
     while (running_ && pc_ < program_.size()) {
         step();
     }
