@@ -223,6 +223,12 @@ void CowVM::execute(const OptimizedInstruction& inst) {
 }
 
 void CowVM::step() {
+    // Auto-start if in Ready state
+    if (status_ == VMStatus::Ready) {
+        running_ = true;
+        status_ = VMStatus::Running;
+    }
+
     if (!running_) return;
     if (pc_ >= program_.size()) {
         running_ = false;

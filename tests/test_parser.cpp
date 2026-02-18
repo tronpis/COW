@@ -51,22 +51,23 @@ TEST_CASE("Parser detects unbalanced nested loops", "[parser]") {
 }
 
 TEST_CASE("Parser parses all instructions", "[parser]") {
+    // Note: MOO must come before moo for valid loop structure
     auto program = Parser::parseString(
-        "moo mOo moO mOO Moo MOo MoO MOO OOO MMM OOM oom"
+        "MOO moo mOo moO mOO Moo MOo MoO OOO MMM OOM oom"
     );
     REQUIRE(program.size() == 12);
-    REQUIRE(program[0].op == OpCode::Moo_Lower);
-    REQUIRE(program[1].op == OpCode::mOo);
-    REQUIRE(program[2].op == OpCode::moO);
-    REQUIRE(program[3].op == OpCode::mOO);
-    REQUIRE(program[4].op == OpCode::Moo_Mixed);
-    REQUIRE(program[5].op == OpCode::MOo);
-    REQUIRE(program[6].op == OpCode::MoO);
-    REQUIRE(program[7].op == OpCode::MOO_Upper);
-    REQUIRE(program[8].op == OpCode::OOO);
-    REQUIRE(program[9].op == OpCode::MMM);
-    REQUIRE(program[10].op == OpCode::OOM);
-    REQUIRE(program[11].op == OpCode::oom);
+    REQUIRE(program[0].op == OpCode::MOO_Upper);  // MOO
+    REQUIRE(program[1].op == OpCode::Moo_Lower);  // moo
+    REQUIRE(program[2].op == OpCode::mOo);        // mOo
+    REQUIRE(program[3].op == OpCode::moO);        // moO
+    REQUIRE(program[4].op == OpCode::mOO);        // mOO
+    REQUIRE(program[5].op == OpCode::Moo_Mixed);  // Moo
+    REQUIRE(program[6].op == OpCode::MOo);        // MOo
+    REQUIRE(program[7].op == OpCode::MoO);        // MoO
+    REQUIRE(program[8].op == OpCode::OOO);        // OOO
+    REQUIRE(program[9].op == OpCode::MMM);        // MMM
+    REQUIRE(program[10].op == OpCode::OOM);       // OOM
+    REQUIRE(program[11].op == OpCode::oom);       // oom
 }
 
 TEST_CASE("Parser optimization combines increments", "[parser]") {
