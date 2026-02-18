@@ -3,6 +3,7 @@
 //--------------------------------------------
 #include "cow/parser.hpp"
 #include "cow/instruction.hpp"
+#include "cow/error.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -368,7 +369,7 @@ int main(int argc, char** argv) {
 
         return 0;
 
-    } catch (const cow::ParseException& e) {
+    } catch (const cow::ParseError& e) {
         std::cerr << "Parse error: " << e.what() << "\n";
         return 1;
     } catch (const std::exception& e) {

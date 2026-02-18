@@ -37,26 +37,35 @@ void CowVM::reset() {
 
 int CowVM::memoryAt(size_t pos) const {
     if (pos >= memory_.size()) {
-        throw VMException("Memory access out of bounds");
+        throw RuntimeError("memory access out of bounds");
     }
     return memory_[pos];
 }
 
 int CowVM::defaultInput() {
-    return std::getchar();
+    int c = std::getchar();
+    if (c == EOF && std::ferror(stdin)) {
+        throw IOError("failed to read input");
+    }
+    return c;
 }
 
 void CowVM::defaultOutputChar(char c) {
-    std::putchar(c);
+    if (std::putchar(c) == EOF) {
+        throw IOError("failed to write output");
+    }
 }
 
 void CowVM::defaultOutputInt(int i) {
-    std::printf("%d\n", i);
+    if (std::printf("%d\n", i) < 0) {
+        throw IOError("failed to write output");
+    }
 }
 
 void CowVM::checkLimits() {
     if (limits_.max_steps > 0 && steps_executed_ > limits_.max_steps) {
-        throw LimitExceededException("Maximum execution steps exceeded");
+        throw LimitError("maximum execution steps exceeded (limit: " +
+                         std::to_string(limits_.max_steps) + ")");
     }
 }
 
@@ -66,7 +75,7 @@ size_t CowVM::findLoopStart(size_t from_pos) {
 
     // Skip previous command
     if (pos == 0) {
-        throw VMException("Invalid loop structure: cannot find matching MOO");
+        throw RuntimeError("invalid loop structure: cannot find matching MOO");
     }
     pos--;
 
@@ -80,7 +89,7 @@ size_t CowVM::findLoopStart(size_t from_pos) {
     }
 
     if (level != 0) {
-        throw VMException("Invalid loop structure: unbalanced moo/MOO");
+        throw RuntimeError("invalid loop structure: unbalanced moo/MOO");
     }
 
     return pos;
@@ -102,7 +111,7 @@ size_t CowVM::findLoopEnd(size_t from_pos) {
     }
 
     if (level != 0) {
-        throw VMException("Invalid loop structure: unbalanced MOO/moo");
+        throw RuntimeError("invalid loop structure: unbalanced MOO/moo");
     }
 
     return pos;
@@ -121,7 +130,7 @@ void CowVM::execute(const Instruction& inst) {
         case OpCode::mOo: {
             // Move memory pointer back
             if (memory_ptr_ == 0) {
-                throw VMException("Memory pointer underflow");
+                throw RuntimeError("memory pointer underflow (attempted to move below position 0)");
             }
             memory_ptr_--;
             break;
@@ -132,7 +141,8 @@ void CowVM::execute(const Instruction& inst) {
             memory_ptr_++;
             if (memory_ptr_ >= memory_.size()) {
                 if (limits_.max_memory > 0 && memory_.size() >= limits_.max_memory) {
-                    throw LimitExceededException("Maximum memory size exceeded");
+                    throw LimitError("maximum memory size exceeded (limit: " +
+                                     std::to_string(limits_.max_memory) + " cells)");
                 }
                 memory_.push_back(0);
             }
@@ -154,7 +164,7 @@ void CowVM::execute(const Instruction& inst) {
                 // Don't increment PC - we already executed one
                 return;
             }
-            // Invalid instruction in memory - do nothing
+            // Invalid instruction in memory - do nothing (as per spec)
             break;
         }
 
@@ -195,7 +205,11 @@ void CowVM::execute(const Instruction& inst) {
 
         case OpCode::MoO: {
             // Increment memory
-            memory_[memory_ptr_]++;
+            if (inst.argument > 1) {
+                memory_[memory_ptr_] += inst.argument;
+            } else {
+                memory_[memory_ptr_]++;
+            }
             break;
         }
 
@@ -262,7 +276,7 @@ void CowVM::execute(const Instruction& inst) {
 
         case OpCode::Invalid:
         default: {
-            throw VMException("Invalid instruction encountered");
+            throw RuntimeError("invalid instruction encountered");
         }
     }
 }

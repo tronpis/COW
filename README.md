@@ -1,43 +1,47 @@
-# COW Programming Language (Modernized Version 2.0)
+# COW Programming Language (Modern C++ Implementation)
 
-The COW Programming Language is an esoteric programming language created by [BigZaphod (Sean Heber)](http://www.bigzaphod.org/cow/). This repository contains a modernized C++ implementation that addresses architectural issues in the original code.
+[![CI](https://github.com/tronpis/cow/actions/workflows/ci.yml/badge.svg)](https://github.com/tronpis/cow/actions)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](CHANGELOG.md)
+[![C++](https://img.shields.io/badge/C++-17-orange.svg)](https://isocpp.org/)
 
-## Architecture Improvements
+The COW Programming Language is an esoteric programming language created by [BigZaphod (Sean Heber)](http://www.bigzaphod.org/cow/). This is a modern C++ implementation with professional tooling, comprehensive tests, and formal specification.
 
-This modernized version addresses the following issues from the original implementation:
+## Features
 
-### 1. Encapsulated VM Class
-- **Before**: Global variables for memory, program, registers
-- **After**: `CowVM` class encapsulates all state, making it thread-safe and reusable
+- **Modern C++17**: Clean, type-safe implementation
+- **Professional CLI**: Syntax checking, debug mode, execution limits
+- **Sandboxed Execution**: Configurable memory, step, and output limits
+- **Comprehensive Tests**: Unit and integration tests with Catch2
+- **CI/CD**: GitHub Actions with sanitizers and multi-platform builds
+- **Formal Specification**: Complete language specification document
 
-### 2. Exception-Based Error Handling
-- **Before**: `exit()` calls that terminate the process immediately
-- **After**: Exceptions (`VMException`, `LimitExceededException`) allow graceful error handling
-
-### 3. Loop-Based Execution
-- **Before**: Recursive `exec()` function that could cause stack overflow
-- **After**: Main execution loop with `run()` and `step()` methods
-
-### 4. Configurable Memory Limits
-- **Before**: Unbounded memory growth
-- **After**: `Limits` struct with configurable max memory, max steps, and max output
-
-### 5. Compiler Auto-Detection
-- **Before**: Hardcoded `g++` compiler path
-- **After**: Auto-detects available compiler (g++, clang++, c++) or uses `CXX` environment variable
-
-### 6. Modern C++ (C++17)
-- Strongly-typed `enum class` for opcodes
-- `std::function` for I/O handlers (testable)
-- Namespace organization
-- CMake build system
-
-## Building
+## Quick Start
 
 ```bash
+# Build
 mkdir build && cd build
-cmake ..
-make
+cmake .. -DCOW_BUILD_TESTS=ON
+make -j$(nproc)
+
+# Run tests
+make test
+
+# Execute a COW program
+./cow ../examples/fib.cow
+
+# Check syntax only
+./cow --check ../examples/fib.cow
+
+# Run with safety limits
+./cow --safe ../examples/fib.cow
+```
+
+## Installation
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+sudo cmake --install build
 ```
 
 ## Usage
@@ -45,66 +49,59 @@ make
 ### Interpreter
 
 ```bash
-# Basic usage
-./cow program.cow
+# Basic execution
+cow program.cow
 
-# Safe mode with limits
-./cow --safe program.cow
-
-# Custom memory size and limits
-./cow --memory 60000 --max-steps 1000000 program.cow
-
-# Quiet mode (no greetings)
-./cow -q program.cow
+# Check syntax without executing
+cow --check program.cow
 
 # Debug mode (step-by-step)
-./cow -d program.cow
+cow --debug program.cow
+
+# Safe mode with limits
+cow --safe --max-steps 1000000 program.cow
+
+# Quiet mode (no banners)
+cow -q program.cow
 ```
 
 ### Compiler
 
 ```bash
 # Compile to native executable
-./cowcomp program.cow
+cowcomp program.cow
 
 # Specify output name
-./cowcomp -o myprogram program.cow
+cowcomp -o myprogram program.cow
 
 # Use specific compiler
-./cowcomp --cxx clang++ program.cow
-
-# Generate C++ source only
-./cowcomp --cpp-only program.cow
-
-# Keep generated C++ source
-./cowcomp -k program.cow
+cowcomp --cxx clang++ program.cow
 ```
 
-## Project Structure
+## Language
 
-```
-include/cow/
-  instruction.hpp  - Instruction enum and OpCode definitions
-  vm.hpp           - CowVM class header
-  parser.hpp       - Parser for COW source files
-  limits.hpp       - Sandbox limits configuration
+COW has 12 instructions, all variations of "moo":
 
-src/
-  instruction.cpp  - Instruction implementation
-  vm.cpp           - CowVM implementation (main execution loop)
-  parser.cpp       - Parser implementation
-  main.cpp         - CLI interpreter entry point
-  compiler.cpp     - COW-to-C++ compiler
+| Instruction | Description |
+|-------------|-------------|
+| `moo` | Loop end |
+| `mOo` | Move memory pointer back |
+| `moO` | Move memory pointer forward |
+| `mOO` | Execute instruction from memory |
+| `Moo` | I/O (output char / input char) |
+| `MOo` | Decrement memory |
+| `MoO` | Increment memory |
+| `MOO` | Loop start |
+| `OOO` | Zero memory |
+| `MMM` | Memory/register exchange |
+| `OOM` | Output number |
+| `oom` | Input number |
 
-examples/
-  fib.cow          - Fibonacci sequence
-  99.cow           - 99 bottles of beer
-  i.cow            - Input/output test
-```
+See [SPECIFICATION.md](SPECIFICATION.md) for complete language definition.
 
-## Example Program
+## Example
 
-Fibonacci sequence (fib.cow):
+Fibonacci sequence:
 ```cow
 MoO
 moO
@@ -137,44 +134,65 @@ MOO
 moo
 ```
 
-## Library Usage
+## Architecture
 
-The CowVM can be used as a library:
+### Project Structure
+```
+include/cow/          - Public headers
+  error.hpp           - Error handling classes
+  instruction.hpp     - Instruction definitions
+  limits.hpp          - Sandbox limits
+  parser.hpp          - Parser interface
+  source_location.hpp - Source location tracking
+  vm.hpp              - Virtual Machine
 
-```cpp
-#include "cow/vm.hpp"
-#include "cow/parser.hpp"
+src/                  - Implementation
+  compiler.cpp        - COW-to-C++ compiler
+  instruction.cpp     - Instruction utilities
+  main.cpp            - CLI interpreter
+  parser.cpp          - Parser implementation
+  vm.cpp              - VM implementation
 
-// Parse program
-auto program = cow::Parser::parseFile("program.cow");
-
-// Create VM with limits
-cow::Limits limits;
-limits.max_steps = 1000000;
-cow::CowVM vm(limits, 30000);
-
-// Load and run
-vm.load(program);
-vm.run();
+tests/                - Test suite
+.github/workflows/    - CI/CD configuration
 ```
 
-## COW Instruction Set
+### Key Design Decisions
 
-| Instruction | Description |
-|-------------|-------------|
-| `moo` | Loop end (like Brainfuck `]`) |
-| `mOo` | Move memory pointer back (like `<`) |
-| `moO` | Move memory pointer forward (like `>`) |
-| `mOO` | Execute instruction at memory position |
-| `Moo` | Output char / Input char (like `.` / `,`) |
-| `MOo` | Decrement memory (like `-`) |
-| `MoO` | Increment memory (like `+`) |
-| `MOO` | Loop start (like Brainfuck `[`) |
-| `OOO` | Zero memory |
-| `MMM` | Memory/register exchange |
-| `OOM` | Output number |
-| `oom` | Input number |
+1. **Encapsulation**: All VM state in `CowVM` class (thread-safe)
+2. **Error Handling**: Exceptions instead of exit() calls
+3. **No Recursion**: Iterative execution prevents stack overflow
+4. **Source Locations**: Error messages include line/column
+5. **Configurable Limits**: Prevent infinite loops and excessive resource use
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+
+### Building with Sanitizers
+
+```bash
+cmake -B build -DCOW_ENABLE_SANITIZERS=ON
+cmake --build build
+./build/cow examples/fib.cow
+```
+
+### Running Tests
+
+```bash
+cmake -B build -DCOW_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+## Documentation
+
+- [SPECIFICATION.md](SPECIFICATION.md) - Formal language specification
+- [CHANGELOG.md](CHANGELOG.md) - Version history
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
 
 ## License
 
-Public Domain (original code by Sean Heber)
+Public Domain - Original code by Sean Heber (BigZaphod)
+
+Modern implementation contributions are also released to the Public Domain.
