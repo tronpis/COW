@@ -1,0 +1,5 @@
+=== COW
+
+COW is a esoteric language. See the link:https://bigzaphod.github.io/COW/[classic COW webpage] for more info!
+
+maintener by tronpis
