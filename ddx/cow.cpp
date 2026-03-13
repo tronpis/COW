@@ -11,6 +11,22 @@
 //--------------------------------------------
 #include <vector>
 #include <stdio.h>
+#include <cstdlib>
+#include <cstring>
+
+template <int I, int N, typename Fn>
+inline void apply_all_stomachs_impl( Fn&& fn )
+{
+    fn( I );
+    if constexpr( I + 1 < N )
+        apply_all_stomachs_impl<I + 1, N>( (Fn&&)fn );
+}
+
+template <int N, typename Fn>
+inline void apply_all_stomachs( Fn&& fn )
+{
+    apply_all_stomachs_impl<0, N>( (Fn&&)fn );
+}
 
 int const num_stomachs = 7;
 
@@ -211,21 +227,19 @@ bool exec( int instruction )
     // Oom
     case 14:
         {
-            for( int i=0; i<num_stomachs; ++i )
-            {
+            apply_all_stomachs<num_stomachs>( [&]( int i ) {
                 if( mem_poses[i] == memory[i].begin() )
                     quit( true );
                 else
                     mem_poses[i]--;
-            }
+            } );
             break;
         }
 
     // oOm
     case 15:
         {
-            for( int i=0; i<num_stomachs; ++i )
-            {
+            apply_all_stomachs<num_stomachs>( [&]( int i ) {
                 mem_poses[i]++;
                 if( mem_poses[i] == memory[i].end() )
                 {
@@ -233,37 +247,34 @@ bool exec( int instruction )
                     mem_poses[i] = memory[i].end();
                     mem_poses[i]--;
                 }
-            }
+            } );
             break;
         }
     
     // OoM
     case 16:
         {
-            for( int i=0; i<num_stomachs; ++i )
-            {
+            apply_all_stomachs<num_stomachs>( [&]( int i ) {
                 (*mem_poses[i])--;
-            }
+            } );
             break;
         }
 
     // oOM
     case 17:
         {
-            for( int i=0; i<num_stomachs; ++i)
-            {
+            apply_all_stomachs<num_stomachs>( [&]( int i ) {
                 (*mem_poses[i])++;
-            }
+            } );
             break;
         }
 
     // ooo
     case 18:
         {
-            for( int i=0; i<num_stomachs; ++i)
-            {
+            apply_all_stomachs<num_stomachs>( [&]( int i ) {
                 (*mem_poses[i]) = 0;
-            }
+            } );
             break;
         }
 
@@ -420,5 +431,4 @@ int main( int argc, char** argv )
 
 	return 0;
 }
-
 

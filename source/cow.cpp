@@ -9,12 +9,16 @@
 #include <stdio.h>
 #include <cstdlib>
 #include <cstring>
+#include <cstdint>
 
+typedef std::uint8_t instruction_t;
+typedef std::vector<instruction_t> program_t;
 typedef std::vector<int> mem_t;
-mem_t program;
+
+program_t program;
+std::vector<int> jump_table;
 mem_t memory;
-mem_t::iterator mem_pos;
-mem_t::iterator prog_pos;
+size_t mem_pos = 0;
 
 int register_val;
 bool has_register_val = false;
@@ -26,231 +30,325 @@ void quit( bool error )
         printf( "\nERROR!\n" );
         exit(1);
     }
-    
+
 #ifndef NO_GREETINGS
     printf( "\nDone.\n" );
 #endif
     exit(0);
 }
 
-bool exec( int instruction )
+int decode_instruction( const char* token )
 {
-//    printf( "EXEC: %d\n", instruction );
-
-    switch( instruction )
+    switch( token[0] )
     {
-    // moo
-    case 0:
-        {
-            if( prog_pos == program.begin() )
-                quit( true );
+    case 'm':
+        if( token[1] == 'o' && token[2] == 'o' ) return 0;
+        if( token[1] == 'O' && token[2] == 'o' ) return 1;
+        if( token[1] == 'o' && token[2] == 'O' ) return 2;
+        if( token[1] == 'O' && token[2] == 'O' ) return 3;
+        break;
+    case 'M':
+        if( token[1] == 'o' && token[2] == 'o' ) return 4;
+        if( token[1] == 'O' && token[2] == 'o' ) return 5;
+        if( token[1] == 'o' && token[2] == 'O' ) return 6;
+        if( token[1] == 'O' && token[2] == 'O' ) return 7;
+        if( token[1] == 'M' && token[2] == 'M' ) return 9;
+        break;
+    case 'O':
+        if( token[1] == 'O' && token[2] == 'O' ) return 8;
+        if( token[1] == 'O' && token[2] == 'M' ) return 10;
+        break;
+    case 'o':
+        if( token[1] == 'o' && token[2] == 'm' ) return 11;
+        break;
+    };
 
-            prog_pos--;	// skip previous command.
-            int level = 1;
-            while( level > 0 )
-            {
-                if( prog_pos == program.begin() )
-                    break;
+    return -1;
+}
 
-                prog_pos--;
-            
-                if( (*prog_pos) == 0 )
-                    level++;
-                else
-                if( (*prog_pos) == 7 )  // look for MOO
-                    level--;
-            }
+void execute_program( long long max_steps )
+{
+    const instruction_t* prog = program.data();
+    const int program_size = (int)program.size();
+    int pc = 0;
+    long long steps = 0;
 
-            if( level != 0 )
-                quit(true);
+#if defined(__GNUC__) || defined(__clang__)
+    static void* dispatch[] = {
+        &&op_moo, &&op_mOo, &&op_moO, &&op_mOO,
+        &&op_Moo, &&op_MOo, &&op_MoO, &&op_MOO,
+        &&op_OOO, &&op_MMM, &&op_OOM, &&op_oom
+    };
+    if( program_size == 0 ) return;
+    instruction_t instruction = prog[pc];
 
-            return exec( *prog_pos );
-        }
-    
-    // mOo
-    case 1:
-        if( mem_pos == memory.begin() )
+    while( pc < program_size )
+    {
+        if( max_steps > 0 && ++steps > max_steps )
             quit( true );
-        else
-            mem_pos--;
-        break;
-
-    // moO
-    case 2:
-        mem_pos++;
-        if( mem_pos == memory.end() )
-        {
-            memory.push_back(0);
-            mem_pos = memory.end();
-            mem_pos--;
-        }
-        break;
-    
-    // mOO    
-    case 3:
-        if( (*mem_pos) == 3 )
+        if( instruction >= 12 )
             quit( false );
-        return exec(*mem_pos);
-    
-    // Moo
-    case 4:
-        if( (*mem_pos) != 0 )
-            printf( "%c", *mem_pos );
+        goto *dispatch[instruction];
+
+op_moo:
+        if( pc == 0 || jump_table[pc] < 0 )
+            quit( true );
+        pc = jump_table[pc];
+        instruction = prog[pc];
+        continue;
+
+op_mOo:
+        if( mem_pos == 0 )
+            quit( true );
+        --mem_pos;
+        ++pc;
+        if( pc < program_size ) instruction = prog[pc];
+        continue;
+
+op_moO:
+        ++mem_pos;
+        if( mem_pos == memory.size() )
+            memory.push_back( 0 );
+        ++pc;
+        if( pc < program_size ) instruction = prog[pc];
+        continue;
+
+op_mOO:
+        if( memory[mem_pos] == 3 )
+            quit( false );
+        if( memory[mem_pos] < 0 || memory[mem_pos] > 11 )
+            quit( false );
+        instruction = (instruction_t)memory[mem_pos];
+        continue;
+
+op_Moo:
+        if( memory[mem_pos] != 0 )
+            printf( "%c", memory[mem_pos] );
         else
         {
-            (*mem_pos) = getchar();
+            memory[mem_pos] = getchar();
             while( getchar() != '\n' );
         }
-        break;
-    
-    // MOo
-    case 5:
-        (*mem_pos)--;
-        break;
-    
-    // MoO
-    case 6:
-        (*mem_pos)++;
-        break;
+        ++pc;
+        if( pc < program_size ) instruction = prog[pc];
+        continue;
 
-    // MOO
-    case 7:
-        if( (*mem_pos) == 0 )
+op_MOo:
+        memory[mem_pos]--;
+        ++pc;
+        if( pc < program_size ) instruction = prog[pc];
+        continue;
+
+op_MoO:
+        memory[mem_pos]++;
+        ++pc;
+        if( pc < program_size ) instruction = prog[pc];
+        continue;
+
+op_MOO:
+        if( memory[mem_pos] == 0 )
         {
-            int level = 1;
-            int prev = 0;
-            prog_pos++;	  // have to skip past next command when looking for next moo.
-            if( prog_pos == program.end() )
-                break;
-            while( level > 0 )
-            {
-                prev = *prog_pos;
-                prog_pos++;
-                
-                if( prog_pos == program.end() )
-                    break;
-                
-                if( (*prog_pos) == 7 )
-                    level++;
-                else
-                if( (*prog_pos) == 0 )	// look for moo command.
-                {
-                    level--;
-                    if( prev == 7 )
-                        level--;
-                }
-            }
-            if( level != 0 )
+            if( jump_table[pc] < 0 )
                 quit( true );
+            pc = jump_table[pc];
         }
-        break;
-    
-    // OOO
-    case 8:
-        (*mem_pos) = 0;
-        break;
+        ++pc;
+        if( pc < program_size ) instruction = prog[pc];
+        continue;
 
-    // MMM
-    case 9:
+op_OOO:
+        memory[mem_pos] = 0;
+        ++pc;
+        if( pc < program_size ) instruction = prog[pc];
+        continue;
+
+op_MMM:
         if( has_register_val )
-            (*mem_pos) = register_val;
+            memory[mem_pos] = register_val;
         else
-            register_val = (*mem_pos);
+            register_val = memory[mem_pos];
         has_register_val = !has_register_val;
-        break;
+        ++pc;
+        if( pc < program_size ) instruction = prog[pc];
+        continue;
 
-    // OOM
-    case 10:
-        printf( "%d\n", *mem_pos );
-        break;
-    
-    // oom
-    case 11:
+op_OOM:
+        printf( "%d\n", memory[mem_pos] );
+        ++pc;
+        if( pc < program_size ) instruction = prog[pc];
+        continue;
+
+op_oom:
         {
             char buf[100];
             int c = 0;
-            while( c < sizeof(buf)-1 )
+            while( c < (int)sizeof(buf)-1 )
             {
                 buf[c] = getchar();
                 c++;
                 buf[c] = 0;
-                
+
                 if( buf[c-1] == '\n' )
                     break;
             }
-            // swallow, just in case.
-            if( c == sizeof(buf) )
+            if( c == (int)sizeof(buf) )
                 while( getchar() != '\n' );
-            
-            (*mem_pos) = atoi( buf );
 
-            break;
+            memory[mem_pos] = atoi( buf );
+            ++pc;
+            if( pc < program_size ) instruction = prog[pc];
+            continue;
         }
+    }
+#else
+    while( pc < program_size )
+    {
+        if( max_steps > 0 && ++steps > max_steps )
+            quit( true );
 
-    // bad stuff
-    default:
-        quit( false );
-    };
+        int instruction = prog[pc];
+        bool redispatch = true;
 
-    prog_pos++;
+        while( redispatch )
+        {
+            redispatch = false;
+            switch( instruction )
+            {
+            case 0:
+                if( pc == 0 || jump_table[pc] < 0 )
+                    quit( true );
+                pc = jump_table[pc];
+                instruction = prog[pc];
+                redispatch = true;
+                break;
+            case 1:
+                if( mem_pos == 0 )
+                    quit( true );
+                --mem_pos;
+                ++pc;
+                break;
+            case 2:
+                ++mem_pos;
+                if( mem_pos == memory.size() )
+                    memory.push_back( 0 );
+                ++pc;
+                break;
+            case 3:
+                if( memory[mem_pos] == 3 )
+                    quit( false );
+                if( memory[mem_pos] < 0 || memory[mem_pos] > 11 )
+                    quit( false );
+                instruction = memory[mem_pos];
+                redispatch = true;
+                break;
+            case 4:
+                if( memory[mem_pos] != 0 )
+                    printf( "%c", memory[mem_pos] );
+                else
+                {
+                    memory[mem_pos] = getchar();
+                    while( getchar() != '\n' );
+                }
+                ++pc;
+                break;
+            case 5:
+                memory[mem_pos]--;
+                ++pc;
+                break;
+            case 6:
+                memory[mem_pos]++;
+                ++pc;
+                break;
+            case 7:
+                if( memory[mem_pos] == 0 )
+                {
+                    if( jump_table[pc] < 0 )
+                        quit( true );
+                    pc = jump_table[pc];
+                }
+                ++pc;
+                break;
+            case 8:
+                memory[mem_pos] = 0;
+                ++pc;
+                break;
+            case 9:
+                if( has_register_val )
+                    memory[mem_pos] = register_val;
+                else
+                    register_val = memory[mem_pos];
+                has_register_val = !has_register_val;
+                ++pc;
+                break;
+            case 10:
+                printf( "%d\n", memory[mem_pos] );
+                ++pc;
+                break;
+            case 11:
+                {
+                    char buf[100];
+                    int c = 0;
+                    while( c < (int)sizeof(buf)-1 )
+                    {
+                        buf[c] = getchar();
+                        c++;
+                        buf[c] = 0;
 
-    return true;
+                        if( buf[c-1] == '\n' )
+                            break;
+                    }
+                    if( c == (int)sizeof(buf) )
+                        while( getchar() != '\n' );
+
+                    memory[mem_pos] = atoi( buf );
+                    ++pc;
+                    break;
+                }
+            default:
+                quit( false );
+            }
+        }
+    }
+#endif
 }
-
 
 int main( int argc, char** argv )
 {
-	if( argc < 2 )
-	{
-		printf( "Usage: %s program.cow\n\n", argv[0] );
-		exit( 1 );
-	}
-
-	FILE* f = fopen( argv[1], "rb" );
-
-	if( f == NULL )
-	{
-		printf( "Cannot open source file [%s].\n", argv[1] );
-        exit( 1 );
-	}
-
-    char buf[3];
-    memset( buf, 0, 3 );
-    int pos = 0;
-
-    while( !feof(f) )
+    if( argc < 2 )
     {
-        int found = 0;
-        buf[2] = fgetc( f );
+        printf( "Usage: %s program.cow\n\n", argv[0] );
+        exit( 1 );
+    }
 
-        if( found = !strncmp( "moo", buf, 3 ) )
-            program.push_back( 0 );
-        else if( found = !strncmp( "mOo", buf, 3 ) )
-            program.push_back( 1 );
-        else if( found = !strncmp( "moO", buf, 3 ) )
-            program.push_back( 2 );
-        else if( found = !strncmp( "mOO", buf, 3 ) )
-            program.push_back( 3 );
-        else if( found = !strncmp( "Moo", buf, 3 ) )
-            program.push_back( 4 );
-        else if( found = !strncmp( "MOo", buf, 3 ) )
-            program.push_back( 5 );
-        else if( found = !strncmp( "MoO", buf, 3 ) )
-            program.push_back( 6 );
-        else if( found = !strncmp( "MOO", buf, 3 ) )
-            program.push_back( 7 );
-        else if( found = !strncmp( "OOO", buf, 3 ) )
-            program.push_back( 8 );
-        else if( found = !strncmp( "MMM", buf, 3 ) )
-            program.push_back( 9 );
-        else if( found = !strncmp( "OOM", buf, 3 ) )
-            program.push_back( 10 );
-        else if( found = !strncmp( "oom", buf, 3 ) )
-            program.push_back( 11 );
-            
-        if( found )
+    FILE* f = fopen( argv[1], "rb" );
+
+    if( f == NULL )
+    {
+        printf( "Cannot open source file [%s].\n", argv[1] );
+        exit( 1 );
+    }
+
+    fseek( f, 0, SEEK_END );
+    const long size = ftell( f );
+    rewind( f );
+
+    std::vector<char> source( size > 0 ? (size_t)size : 0 );
+    if( !source.empty() )
+    {
+        const size_t bytes_read = fread( &source[0], 1, source.size(), f );
+        source.resize( bytes_read );
+    }
+
+    char buf[3] = {0,0,0};
+    for( size_t i = 0; i < source.size(); ++i )
+    {
+        buf[2] = source[i];
+        const int instruction = decode_instruction( buf );
+
+        if( instruction >= 0 )
         {
-            memset( buf, 0, 3 );
+            program.push_back( (instruction_t)instruction );
+            memset( buf, 0, sizeof(buf) );
         }
         else
         {
@@ -260,24 +358,41 @@ int main( int argc, char** argv )
         }
     }
 
-	fclose( f );
+    fclose( f );
 
 #ifndef NO_GREETINGS
-	printf( "Welcome to COW!\n\nExecuting [%s]...\n\n", argv[1] );
+    printf( "Welcome to COW!\n\nExecuting [%s]...\n\n", argv[1] );
 #endif
 
-    // init main memory.
+    jump_table.assign( program.size(), -1 );
+    std::vector<size_t> stack;
+    for( size_t i = 0; i < program.size(); ++i )
+    {
+        if( program[i] == 7 )
+            stack.push_back( i );
+        else if( program[i] == 0 )
+        {
+            if( stack.empty() )
+                quit( true );
+
+            const size_t open = stack.back();
+            stack.pop_back();
+            jump_table[open] = (int)i;
+            jump_table[i] = (int)open;
+        }
+    }
+    if( !stack.empty() )
+        quit( true );
+
+    memory.reserve( 1024 );
     memory.push_back( 0 );
-    mem_pos = memory.begin();
 
-    prog_pos = program.begin();
-    while( prog_pos != program.end() )
-        if( !exec( *prog_pos ) )
-            break;
+    long long max_steps = 0;
+    if( const char* max_steps_env = getenv( "COW_MAX_STEPS" ) )
+        max_steps = atoll( max_steps_env );
 
+    execute_program( max_steps );
     quit( false );
 
-	return 0;
+    return 0;
 }
-
-
