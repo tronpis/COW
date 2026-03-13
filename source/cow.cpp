@@ -79,6 +79,7 @@ void execute_program( long long max_steps )
         &&op_Moo, &&op_MOo, &&op_MoO, &&op_MOO,
         &&op_OOO, &&op_MMM, &&op_OOM, &&op_oom
     };
+    if( program_size == 0 ) return;
     instruction_t instruction = prog[pc];
 
     while( pc < program_size )
