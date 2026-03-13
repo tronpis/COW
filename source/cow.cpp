@@ -86,6 +86,8 @@ void execute_program( long long max_steps )
     {
         if( max_steps > 0 && ++steps > max_steps )
             quit( true );
+        if( instruction >= 12 )
+            quit( false );
         goto *dispatch[instruction];
 
 op_moo:
