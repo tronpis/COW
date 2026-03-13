@@ -9,6 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
+#include <cstdint>
+#include <cstring>
+#include <cstdarg>
 
 #define COMPILER	"g++"
 #define FLAGS		"-O3 -x c++"
@@ -17,14 +20,15 @@
 #define OUTPUT_CPP	"cow.out.cpp"
 
 
-//#define PRETTY(s)	fprintf( output, "\t\t\t// %s\n", s );
+//#define PRETTY(s)	emit( "\t\t\t// %s\n", s );
 #define PRETTY(s)	
 
 
-typedef std::vector<int> mem_t;
+typedef std::uint8_t instruction_t;
+typedef std::vector<instruction_t> mem_t;
 mem_t program;
 mem_t::iterator prog_pos;
-FILE* output;
+std::string output;
 
 int moocount(0);
 int MOOcount(0);
@@ -34,6 +38,59 @@ void quit()
 {
     printf( "Compile error.  Invalid source code.\n" );
     exit(1);
+}
+
+void emit( const char* fmt, ... )
+{
+    char local[512];
+    va_list args;
+    va_start( args, fmt );
+    int n = vsnprintf( local, sizeof(local), fmt, args );
+    va_end( args );
+
+    if( n <= 0 )
+        return;
+
+    if( n < (int)sizeof(local) )
+    {
+        output.append( local, (size_t)n );
+        return;
+    }
+
+    std::vector<char> dynamic_buf( (size_t)n + 1 );
+    va_start( args, fmt );
+    vsnprintf( &dynamic_buf[0], dynamic_buf.size(), fmt, args );
+    va_end( args );
+    output.append( &dynamic_buf[0], (size_t)n );
+}
+
+int decode_instruction( const char* token )
+{
+    switch( token[0] )
+    {
+    case 'm':
+        if( token[1] == 'o' && token[2] == 'o' ) return 0;
+        if( token[1] == 'O' && token[2] == 'o' ) return 1;
+        if( token[1] == 'o' && token[2] == 'O' ) return 2;
+        if( token[1] == 'O' && token[2] == 'O' ) return 3;
+        break;
+    case 'M':
+        if( token[1] == 'o' && token[2] == 'o' ) return 4;
+        if( token[1] == 'O' && token[2] == 'o' ) return 5;
+        if( token[1] == 'o' && token[2] == 'O' ) return 6;
+        if( token[1] == 'O' && token[2] == 'O' ) return 7;
+        if( token[1] == 'M' && token[2] == 'M' ) return 9;
+        break;
+    case 'O':
+        if( token[1] == 'O' && token[2] == 'O' ) return 8;
+        if( token[1] == 'O' && token[2] == 'M' ) return 10;
+        break;
+    case 'o':
+        if( token[1] == 'o' && token[2] == 'm' ) return 11;
+        break;
+    };
+
+    return -1;
 }
 
 bool compile( int instruction, bool advance )
@@ -74,13 +131,13 @@ bool compile( int instruction, bool advance )
                 quit();
             else if( level != 0 )
             {
-                fprintf( output, "rterr();" );
+                emit( "rterr();" );
                 break;
             }
 
             moocount++;
-            fprintf( output, "goto M%d;", num );
-            fprintf( output, "m%d:", moocount );
+            emit( "goto M%d;", num );
+            emit( "m%d:", moocount );
             PRETTY( "moo" );
         }
         break;
@@ -88,13 +145,13 @@ bool compile( int instruction, bool advance )
     
     // mOo
     case 1:
-        fprintf( output, "if(p==m.begin()){rterr();}else{p--;}" );
+        emit( "if(p==m.begin()){rterr();}else{p--;}" );
         PRETTY( "mOo" );
         break;
 
     // moO
     case 2:
-        fprintf( output, "p++; if(p==m.end()){m.push_back(0);p=m.end();p--;}" );
+        emit( "p++; if(p==m.end()){m.push_back(0);p=m.end();p--;}" );
         PRETTY( "moO" );
         break;
     
@@ -104,37 +161,37 @@ bool compile( int instruction, bool advance )
         // use the compile function itself to fill in the possibilities.
 //        printf( "NOT IMPLEMENTED: mOO\n\n" );
 //        quit();
-        fprintf( output, "switch(*p){" );
-        fprintf( output, "case 0:{" ); compile( 0, false ); fprintf( output, "}break;" );
-        fprintf( output, "case 1:{" ); compile( 1, false ); fprintf( output, "}break;" );
-        fprintf( output, "case 2:{" ); compile( 2, false ); fprintf( output, "}break;" );
-        fprintf( output, "case 4:{" ); compile( 4, false ); fprintf( output, "}break;" );
-        fprintf( output, "case 5:{" ); compile( 5, false ); fprintf( output, "}break;" );
-        fprintf( output, "case 6:{" ); compile( 6, false ); fprintf( output, "}break;" );
-        fprintf( output, "case 7:{" ); compile( 7, false ); fprintf( output, "}break;" );
-        fprintf( output, "case 8:{" ); compile( 8, false ); fprintf( output, "}break;" );
-        fprintf( output, "case 9:{" ); compile( 9, false ); fprintf( output, "}break;" );
-        fprintf( output, "case 10:{" ); compile( 10, false ); fprintf( output, "}break;" );
-        fprintf( output, "case 11:{" ); compile( 11, false ); fprintf( output, "}break;" );
-        fprintf( output, "default:{goto x;}};" );
+        emit( "switch(*p){" );
+        emit( "case 0:{" ); compile( 0, false ); emit( "}break;" );
+        emit( "case 1:{" ); compile( 1, false ); emit( "}break;" );
+        emit( "case 2:{" ); compile( 2, false ); emit( "}break;" );
+        emit( "case 4:{" ); compile( 4, false ); emit( "}break;" );
+        emit( "case 5:{" ); compile( 5, false ); emit( "}break;" );
+        emit( "case 6:{" ); compile( 6, false ); emit( "}break;" );
+        emit( "case 7:{" ); compile( 7, false ); emit( "}break;" );
+        emit( "case 8:{" ); compile( 8, false ); emit( "}break;" );
+        emit( "case 9:{" ); compile( 9, false ); emit( "}break;" );
+        emit( "case 10:{" ); compile( 10, false ); emit( "}break;" );
+        emit( "case 11:{" ); compile( 11, false ); emit( "}break;" );
+        emit( "default:{goto x;}};" );
         PRETTY( "mOO" );
         break;
     
     // Moo
     case 4:
-        fprintf( output, "if((*p)!=0){putchar(*p);}else{(*p)=getchar();while(getchar()!='\\n');}" );
+        emit( "if((*p)!=0){putchar(*p);}else{(*p)=getchar();while(getchar()!='\\n');}" );
         PRETTY( "Moo" );
         break;
     
     // MOo
     case 5:
-        fprintf( output, "(*p)--;" );
+        emit( "(*p)--;" );
         PRETTY( "MOo" );
         break;
     
     // MoO
     case 6:
-        fprintf( output, "(*p)++;" );
+        emit( "(*p)++;" );
         PRETTY( "MoO" );
         break;
 
@@ -180,40 +237,40 @@ bool compile( int instruction, bool advance )
                 quit();
             else if( level != 0 )
             {
-                fprintf( output, "rterr();" );
+                emit( "rterr();" );
                 break;
             }
             
             MOOcount++;
-            fprintf( output, "M%d:", MOOcount );
-            fprintf( output, "if(!(*p))goto m%d;", num );
+            emit( "M%d:", MOOcount );
+            emit( "if(!(*p))goto m%d;", num );
             PRETTY( "MOO" );
         }
         break;
     
     // OOO
     case 8:
-        fprintf( output, "(*p)=0;" );
+        emit( "(*p)=0;" );
         PRETTY( "OOO" );
         break;
 
     // MMM
     case 9:
-        fprintf( output, "if(h){(*p)=r;}else{r=(*p);}h=!h;" );
+        emit( "if(h){(*p)=r;}else{r=(*p);}h=!h;" );
         PRETTY( "MMM" );
         break;
 
     // OOM
     case 10:
-        fprintf( output, "printf(\"%%d\\n\",*p);" );
+        emit( "printf(\"%%d\\n\",*p);" );
         PRETTY( "OOM" );
         break;
     
     // oom
     case 11:
-        fprintf( output, "char b[100];int c=0;" );
-        fprintf( output, "while(c<sizeof(b)-1){b[c]=getchar();c++;b[c]=0;if(b[c-1]=='\\n')break;}" );
-        fprintf( output, "if(c==sizeof(b))while(getchar()!='\\n');(*p)=atoi(b);" );
+        emit( "char b[100];int c=0;" );
+        emit( "while(c<sizeof(b)-1){b[c]=getchar();c++;b[c]=0;if(b[c-1]=='\\n')break;}" );
+        emit( "if(c==sizeof(b))while(getchar()!='\\n');(*p)=atoi(b);" );
         PRETTY( "oom" );
         break;
 
@@ -245,43 +302,27 @@ int main( int argc, char** argv )
         exit( 1 );
 	}
 
-    char buf[3];
-    memset( buf, 0, 3 );
-    int pos = 0;
+    fseek( f, 0, SEEK_END );
+    const long size = ftell( f );
+    rewind( f );
 
-    while( !feof(f) )
+    std::vector<char> source( size > 0 ? (size_t)size : 0 );
+    if( !source.empty() )
     {
-        int found = 0;
-        buf[2] = fgetc( f );
+        const size_t bytes_read = fread( &source[0], 1, source.size(), f );
+        source.resize( bytes_read );
+    }
 
-        if( found = !strncmp( "moo", buf, 3 ) )
-            program.push_back( 0 );
-        else if( found = !strncmp( "mOo", buf, 3 ) )
-            program.push_back( 1 );
-        else if( found = !strncmp( "moO", buf, 3 ) )
-            program.push_back( 2 );
-        else if( found = !strncmp( "mOO", buf, 3 ) )
-            program.push_back( 3 );
-        else if( found = !strncmp( "Moo", buf, 3 ) )
-            program.push_back( 4 );
-        else if( found = !strncmp( "MOo", buf, 3 ) )
-            program.push_back( 5 );
-        else if( found = !strncmp( "MoO", buf, 3 ) )
-            program.push_back( 6 );
-        else if( found = !strncmp( "MOO", buf, 3 ) )
-            program.push_back( 7 );
-        else if( found = !strncmp( "OOO", buf, 3 ) )
-            program.push_back( 8 );
-        else if( found = !strncmp( "MMM", buf, 3 ) )
-            program.push_back( 9 );
-        else if( found = !strncmp( "OOM", buf, 3 ) )
-            program.push_back( 10 );
-        else if( found = !strncmp( "oom", buf, 3 ) )
-            program.push_back( 11 );
-            
-        if( found )
+    char buf[3] = {0,0,0};
+    for( size_t i = 0; i < source.size(); ++i )
+    {
+        buf[2] = source[i];
+        const int instruction = decode_instruction( buf );
+
+        if( instruction >= 0 )
         {
-            memset( buf, 0, 3 );
+            program.push_back( (instruction_t)instruction );
+            memset( buf, 0, sizeof(buf) );
         }
         else
         {
@@ -301,14 +342,15 @@ int main( int argc, char** argv )
     mem_pos = memory.begin();
     */
     
-    output = fopen( "cow.out.cpp", "wb" );
-    fprintf( output, "#include <stdio.h>\n" );
-    fprintf( output, "#include <vector>\n" );
-    fprintf( output, "typedef std::vector<int> t_;t_ m;t_::iterator p;\n" );
-    fprintf( output, "bool h;int r;\n" );
-    fprintf( output, "void rterr(){puts(\"Runtime error.\\n\");}\n" );
-    fprintf( output, "int main(int a,char** v){\n" );
-    fprintf( output, "m.push_back(0);p=m.begin();h=false;\n" );
+    output.clear();
+    output.reserve( 64 * 1024 );
+    emit( "#include <stdio.h>\n" );
+    emit( "#include <vector>\n" );
+    emit( "typedef std::vector<int> t_;t_ m;t_::iterator p;\n" );
+    emit( "bool h;int r;\n" );
+    emit( "void rterr(){puts(\"Runtime error.\\n\");}\n" );
+    emit( "int main(int a,char** v){\n" );
+    emit( "m.push_back(0);p=m.begin();h=false;\n" );
 
     prog_pos = program.begin();
     while( prog_pos != program.end() )
@@ -318,8 +360,16 @@ int main( int argc, char** argv )
             break;
         }
         
-    fprintf( output, "x:return(0);}\n" );        
-    fclose( output );
+    emit( "x:return(0);}\n" );
+
+    FILE* out_file = fopen( "cow.out.cpp", "wb" );
+    if( out_file == NULL )
+    {
+        printf( "Could not write output file.\n" );
+        exit( 1 );
+    }
+    fwrite( output.data(), 1, output.size(), out_file );
+    fclose( out_file );
 
     printf( "C++ source code: cow.out.cpp\n" );
 
@@ -341,5 +391,4 @@ int main( int argc, char** argv )
 
 	return 0;
 }
-
 
